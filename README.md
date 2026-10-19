@@ -48,11 +48,20 @@ DeepSeek Harness 插件。它盯着模型的**思考段**，一旦发现同一�
 
 ## 安装
 
+**插件市场**：在 Harness 的「插件市场」里搜索 `dsh-degeneration-guard`，一键安装。
+
+**命令行**（桌面版 PATH 里通常没有 `dsh`，直接用 npx 跑）：
+
 ```bash
-dsh plugin --profile desktop add dsh-degeneration-guard
+npx -y @deepseek-ai/dsh@latest plugin --profile desktop add dsh-degeneration-guard
 ```
 
-或在 Harness 的插件市场里搜索 `dsh-degeneration-guard`。装好后在 **设置 → 复读打断** 里配置。
+`--profile` 填你的 profile 名，桌面版默认是 `desktop`（不确定就看 `~/.dsh/profiles/` 下的目录名）。
+
+> npx 会取 npm 上最新的 dsh CLI（约 76 KB，拉起很快）。如果它和你的桌面版本不一致、
+> 报 profile 不兼容，改用上面的插件市场安装——插件本身不挑安装方式。
+
+装好后在 **设置 → 复读打断** 里配置。
 
 要求 dsh `0.1.7` 及以上（`0.2.x` 亦可）。
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-degeneration-guard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness 插件：检测思考段复读并自动打断、自动续跑。通用重复检测，不依赖白名单；支持行内重复开关、可编辑拦截提示词与聊天内提示。",
   "type": "module",
   "main": "index.js",
@@ -38,11 +38,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/BlueMika111/dsh-degeneration-guard.git"
+    "url": "git+https://github.com/bluemika111/dsh-degeneration-guard.git"
   },
-  "homepage": "https://github.com/BlueMika111/dsh-degeneration-guard#readme",
+  "homepage": "https://github.com/bluemika111/dsh-degeneration-guard#readme",
   "bugs": {
-    "url": "https://github.com/BlueMika111/dsh-degeneration-guard/issues"
+    "url": "https://github.com/bluemika111/dsh-degeneration-guard/issues"
   },
   "engines": {
     "node": ">=20"

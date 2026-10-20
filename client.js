@@ -281,29 +281,41 @@ window.__ModuleLoader__.load({
       const timer = React.useRef(0);
 
       React.useEffect(() => {
-        let last = 0;
-        try {
-          const snapshot = form.getSnapshot();
-          last = typeof snapshot.value?.count === 'number' ? snapshot.value.count : 0;
-        } catch {
-          last = 0;
-        }
-        const off = form.subscribe(() => {
-          let value;
+        // 只有配置镜像真正就绪（status = 'ready'）的值才算数。启动瞬间拿到的是
+        // 草稿/默认值，拿它当基线的话，历史累计值一到就会被误判成"刚拦截了一次"，
+        // 表现就是每次重开 DSH 右下角都弹一次。
+        const readValue = () => {
           try {
-            value = form.getSnapshot().value;
+            const snapshot = form.getSnapshot();
+            if (snapshot !== null && snapshot !== undefined && snapshot.status === 'ready' && snapshot.value) {
+              return snapshot.value;
+            }
           } catch {
-            return;
+            /* 镜像尚未建立 */
           }
-          if (value === undefined || value === null) {
+          return undefined;
+        };
+
+        /** 是否已经用真实值建立过基线。 */
+        let ready = false;
+        let last = 0;
+
+        const consume = () => {
+          const value = readValue();
+          if (value === undefined) {
             return;
           }
           const next = value.count;
           if (typeof next !== 'number') {
             return;
           }
-          if (next > last) {
+          if (!ready) {
+            // 第一次见到真实值：它包含历史上所有拦截，只作基线，不提示。
+            ready = true;
             last = next;
+            return;
+          }
+          if (next > last) {
             setNotice({
               count: next,
               autoResume: value.autoResume !== false,
@@ -312,10 +324,12 @@ window.__ModuleLoader__.load({
             timer.current = setTimeout(() => {
               setNotice(null);
             }, 5200);
-          } else if (next < last) {
-            last = next;
           }
-        });
+          last = next;
+        };
+
+        consume();
+        const off = form.subscribe(consume);
         return () => {
           off();
           clearTimeout(timer.current);

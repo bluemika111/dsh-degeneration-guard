@@ -32,6 +32,29 @@ const PENDING_UNIT_LIMIT = 64;
 const FENCE = /^(```|~~~)/;
 
 /**
+ * 短行门槛：长度不超过这个值的行（"执行。" "好。" 这类命令动词、口头禅），
+ * 需要比阈值多出现几次才算复读。
+ *
+ * 起因是真实数据：阈值 5 下命中的 20 次全部是「执行。」，而它们所在的消息是
+ * 正常的分步调查推理，只是每推进一步就写一行「执行。」收尾。短行在长任务里
+ * 天然高频，同一个门槛套在长短行上，误伤几乎必然。
+ */
+const SHORT_LINE_LIMIT = 4;
+
+/** 短行需要的额外次数。 */
+const SHORT_LINE_BONUS = 2;
+
+/**
+ * 这一行需要出现几次才判复读。
+ * @param {string} line - 已 trim 的行。
+ * @param {number} base - 配置的阈值。
+ * @returns {number} 实际门槛。
+ */
+function needCount(line, base) {
+  return line.length <= SHORT_LINE_LIMIT ? base + SHORT_LINE_BONUS : base;
+}
+
+/**
  * 这一行是不是纯装饰（只有数字、标点、符号、空白）。
  * @param {string} line - 已 trim 的行。
  * @returns {boolean} true 表示不参与判定。
@@ -130,7 +153,7 @@ export function createAnalyzer() {
     for (let at = from; at < lines.length; at += 1) {
       const line = lines[at];
       const seen = (counts.get(line) ?? 0) + 1;
-      if (seen >= config.threshold) {
+      if (seen >= needCount(line, config.threshold)) {
         return { kind: 'line', line, count: seen };
       }
       counts.set(line, seen);

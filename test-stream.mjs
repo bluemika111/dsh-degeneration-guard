@@ -1,6 +1,6 @@
 /**
  * stream-guard.js 的集成自测：node test-stream.mjs
- * 用假流模拟上游，验证截断、计数与待续跑标记。
+ * 用假流模拟上游，验证截断、计数、待续跑标记与冷却。
  */
 
 import { createStreamGuard } from './stream-guard.js';
@@ -37,10 +37,13 @@ function check(name, condition, detail = '') {
   }
 }
 
+/** 长句重复：不受短行门槛影响，门槛 3 时 3 行即可命中。 */
+const LONG_REPEAT = ['我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n'];
+
 // 1. 命中：应补 block-end + finish 并登记续跑
 {
   let count = 0;
-  const state = { pending: new Map() };
+  const state = { pending: new Map(), recent: new Map() };
   const runtime = {
     read: () => ({
       threshold: 3,
@@ -56,7 +59,7 @@ function check(name, condition, detail = '') {
   };
   const guard = createStreamGuard(state, runtime);
   const out = await collect(
-    guard({ sessionId: 's1' }, () => upstream(['好。\n', '好。\n', '好。\n', '还会继续\n', '还会继续\n'])),
+    guard({ sessionId: 's1' }, () => upstream([...LONG_REPEAT, '还会继续\n', '还会继续\n'])),
   );
   const end = out.slice(-2);
   check('命中后补 block-end', end[0]?.type === 'block-end' && end[0]?.block?.type === 'reasoning');
@@ -69,7 +72,7 @@ function check(name, condition, detail = '') {
 // 2. 未命中：原样透传到 finish
 {
   let count = 0;
-  const state = { pending: new Map() };
+  const state = { pending: new Map(), recent: new Map() };
   const runtime = {
     read: () => ({
       threshold: 3,
@@ -95,7 +98,7 @@ function check(name, condition, detail = '') {
 // 3. autoResume 关闭：拦截但不出待续跑标记
 {
   let count = 0;
-  const state = { pending: new Map() };
+  const state = { pending: new Map(), recent: new Map() };
   const runtime = {
     read: () => ({
       threshold: 3,
@@ -110,7 +113,7 @@ function check(name, condition, detail = '') {
     },
   };
   const guard = createStreamGuard(state, runtime);
-  const out = await collect(guard({ sessionId: 's3' }, () => upstream(['好。\n', '好。\n', '好。\n', '继续\n'])));
+  const out = await collect(guard({ sessionId: 's3' }, () => upstream([...LONG_REPEAT, '继续\n'])));
   check('关闭自动续跑仍截断', out.at(-1)?.type === 'finish');
   check('关闭自动续跑不登记', state.pending.size === 0);
   check('关闭自动续跑仍计数', count === 1);
@@ -119,7 +122,7 @@ function check(name, condition, detail = '') {
 // 4. 辅助调用（purpose 有值）不检测
 {
   let count = 0;
-  const state = { pending: new Map() };
+  const state = { pending: new Map(), recent: new Map() };
   const runtime = {
     read: () => ({ threshold: 3, inlineRepeat: false, autoResume: true, resumeText: '', resumeSummary: '' }),
     countHit: () => {
@@ -128,16 +131,14 @@ function check(name, condition, detail = '') {
     },
   };
   const guard = createStreamGuard(state, runtime);
-  const out = await collect(
-    guard({ sessionId: 's4', purpose: 'session-title' }, () => upstream(['好。\n', '好。\n', '好。\n'])),
-  );
+  const out = await collect(guard({ sessionId: 's4', purpose: 'session-title' }, () => upstream(LONG_REPEAT)));
   check('辅助调用直接透传', out.length === 6 && count === 0, `out=${out.length} count=${count}`);
 }
 
 // 5. 上一次拦截的欠账还没结算时，仍然拦截（不能因为欠账而永久漏拦）
 {
   let count = 0;
-  const state = { pending: new Map([['s5', { count: 1, line: '好。' }]]) };
+  const state = { pending: new Map([['s5', { count: 1, line: '好。' }]]), recent: new Map() };
   const runtime = {
     read: () => ({ threshold: 3, inlineRepeat: false, autoResume: true, resumeText: '', resumeSummary: '' }),
     countHit: () => {
@@ -146,12 +147,55 @@ function check(name, condition, detail = '') {
     },
   };
   const guard = createStreamGuard(state, runtime);
-  const out = await collect(guard({ sessionId: 's5' }, () => upstream(['好。\n', '好。\n', '好。\n'])));
+  const out = await collect(guard({ sessionId: 's5' }, () => upstream(LONG_REPEAT)));
   check(
     '欠账未结算时仍拦截',
     count === 1 && out.at(-1)?.type === 'finish' && state.pending.get('s5')?.count === 1,
     `count=${count} pending=${JSON.stringify(state.pending.get('s5'))}`,
   );
+}
+
+// 6. 冷却：同一会话 10 分钟内最多拦 2 次，第 3 次放行且不计数
+{
+  let count = 0;
+  const state = { pending: new Map(), recent: new Map() };
+  const runtime = {
+    read: () => ({ threshold: 5, inlineRepeat: false, autoResume: true, resumeText: '', resumeSummary: '' }),
+    countHit: () => {
+      count += 1;
+      return count;
+    },
+  };
+  const guard = createStreamGuard(state, runtime);
+  const parts = ['我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n'];
+  const totals = [];
+  for (let i = 0; i < 3; i += 1) {
+    await collect(guard({ sessionId: 'cool' }, () => upstream(parts)));
+    totals.push(count);
+  }
+  check('冷却：第 1 次拦截', totals[0] === 1, JSON.stringify(totals));
+  check('冷却：第 2 次拦截', totals[1] === 2, JSON.stringify(totals));
+  check('冷却：第 3 次放行不计数', totals[2] === 2, JSON.stringify(totals));
+  check('冷却：窗口内记录了 2 次', state.recent.get('cool')?.length === 2, JSON.stringify(state.recent.get('cool')));
+}
+
+// 7. 冷却只影响同一会话
+{
+  let count = 0;
+  const state = { pending: new Map(), recent: new Map() };
+  const runtime = {
+    read: () => ({ threshold: 5, inlineRepeat: false, autoResume: true, resumeText: '', resumeSummary: '' }),
+    countHit: () => {
+      count += 1;
+      return count;
+    },
+  };
+  const guard = createStreamGuard(state, runtime);
+  const parts = ['我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n'];
+  await collect(guard({ sessionId: 'cool-a' }, () => upstream(parts)));
+  await collect(guard({ sessionId: 'cool-a' }, () => upstream(parts)));
+  await collect(guard({ sessionId: 'cool-b' }, () => upstream(parts)));
+  check('冷却按会话隔离', count === 3, `count=${count}`);
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`);

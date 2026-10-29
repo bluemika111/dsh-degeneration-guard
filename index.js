@@ -28,7 +28,7 @@ export function apply(ctx, config) {
   // 直接写 stdout：dsh 把插件 stdout 收进 journal，便于确认插件确实被加载。
   console.log('[degeneration-guard] 已加载，复读拦截生效');
 
-  const state = { pending: new Map() };
+  const state = { pending: new Map(), recent: new Map() };
   const runtime = createRuntime(ctx, config);
 
   ctx.on('llm/stream', createStreamGuard(state, runtime), { global: true });

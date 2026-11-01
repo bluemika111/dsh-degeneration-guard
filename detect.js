@@ -45,12 +45,52 @@ const SHORT_LINE_LIMIT = 4;
 const SHORT_LINE_BONUS = 2;
 
 /**
+ * 判断"整段思考已经碎片化"的短行长度上限，比 SHORT_LINE_LIMIT 宽一点。
+ */
+const FRAGMENTED_LINE_LIMIT = 6;
+
+/**
+ * 窗口内短行占比达到这个值就算碎片化。
+ *
+ * 碎片化是另一种形态：模型不再产出实质内容，只在一堆两三字的短句之间来回跳
+ * （「执行。写文件。执行。好。执行。写。……」）。这种上下文里短行重复就是强信号，
+ * 不该再套那 +2 的宽松门槛。真实误伤样本的短行占比只有 40%，雷霆大复读是 100%，
+ * 用这个比例就能把两者分开。
+ */
+const FRAGMENTED_RATIO = 0.7;
+
+/**
+ * 窗口内是不是已经碎片化。
+ * @param {string[]} lines - 已完成的判定行。
+ * @param {number} from - 窗口起点。
+ * @returns {boolean} true 表示整段都在打转。
+ */
+function isFragmented(lines, from) {
+  const total = lines.length - from;
+  if (total <= 0) {
+    return false;
+  }
+  let short = 0;
+  for (let at = from; at < lines.length; at += 1) {
+    if (lines[at].length <= FRAGMENTED_LINE_LIMIT) {
+      short += 1;
+    }
+  }
+  return short / total >= FRAGMENTED_RATIO;
+}
+
+/**
  * 这一行需要出现几次才判复读。
  * @param {string} line - 已 trim 的行。
  * @param {number} base - 配置的阈值。
+ * @param {boolean} fragmented - 窗口是否已碎片化。
  * @returns {number} 实际门槛。
  */
-function needCount(line, base) {
+function needCount(line, base, fragmented) {
+  if (fragmented) {
+    // 整段都在打转时，短行重复本身就是退化信号，不再加宽。
+    return base;
+  }
   return line.length <= SHORT_LINE_LIMIT ? base + SHORT_LINE_BONUS : base;
 }
 
@@ -149,12 +189,13 @@ export function createAnalyzer() {
   function windowHit(config) {
     const size = Math.max(9, config.threshold * 3);
     const from = Math.max(0, lines.length - size);
+    const fragmented = isFragmented(lines, from);
     const counts = new Map();
     for (let at = from; at < lines.length; at += 1) {
       const line = lines[at];
       const seen = (counts.get(line) ?? 0) + 1;
-      if (seen >= needCount(line, config.threshold)) {
-        return { kind: 'line', line, count: seen };
+      if (seen >= needCount(line, config.threshold, fragmented)) {
+        return { kind: 'line', line, count: seen, fragmented };
       }
       counts.set(line, seen);
     }

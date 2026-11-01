@@ -83,7 +83,12 @@ async function* guardStream(downstream, sessionId, state, runtime) {
           const config = runtime.read();
           const hit = analyzer.push(chunk.text, config);
           if (hit !== null) {
-            const slot = takeSlot(state, sessionId, Date.now());
+            // 碎片化窗口（整段都在「执行。写。好。」之间打转）是真退化的强信号：
+            // 它不受冷却限制，否则一段几百行的雷霆复读会被冷却一路放行。
+            const slot =
+              hit.fragmented === true
+                ? { allowed: true, used: 0, bypassed: true }
+                : takeSlot(state, sessionId, Date.now());
             if (!slot.allowed) {
               suppressed = true;
               console.log(
@@ -95,7 +100,7 @@ async function* guardStream(downstream, sessionId, state, runtime) {
                 state.pending.set(sessionId, { count, line: hit.line });
               }
               console.log(
-                `[degeneration-guard] 检出复读，已截断本次生成 | 会话=${sessionId ?? '无'} | 方式=${hit.kind} | 行=${JSON.stringify(hit.line)} | 次数=${hit.count} | 累计=${count} | 自动续跑=${config.autoResume ? '是' : '否'}`,
+                `[degeneration-guard] 检出复读，已截断本次生成 | 会话=${sessionId ?? '无'} | 方式=${hit.kind} | 行=${JSON.stringify(hit.line)} | 次数=${hit.count} | 碎片化=${hit.fragmented === true ? '是' : '否'} | 累计=${count} | 自动续跑=${config.autoResume ? '是' : '否'}`,
               );
               // 触发点本身已经产生了，照常放行；要掐掉的是它之后的思考。
               yield chunk;

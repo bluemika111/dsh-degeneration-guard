@@ -198,5 +198,30 @@ const LONG_REPEAT = ['我需要先检查服务器状态。\n', '我需要先检�
   check('冷却按会话隔离', count === 3, `count=${count}`);
 }
 
+// 8. 碎片化命中不受冷却限制：雷霆大复读必须一直拦
+{
+  let count = 0;
+  const state = { pending: new Map(), recent: new Map() };
+  const runtime = {
+    read: () => ({ threshold: 5, inlineRepeat: false, autoResume: true, resumeText: '', resumeSummary: '' }),
+    countHit: () => {
+      count += 1;
+      return count;
+    },
+  };
+  const guard = createStreamGuard(state, runtime);
+  const cycle = ['执行。\n', '写文件。\n', '执行。\n', '好。\n', '执行。\n', '写。\n', '执行。\n', '完成。\n', '写。\n', '执行。\n', '写文件。\n', '执行。\n', '好。\n', '执行。\n'];
+  const parts = [];
+  for (let i = 0; i < 8; i += 1) parts.push(...cycle);
+  const totals = [];
+  for (let i = 0; i < 3; i += 1) {
+    await collect(guard({ sessionId: 'thunder' }, () => upstream(parts)));
+    totals.push(count);
+  }
+  check('碎片化：第 1 次拦截', totals[0] === 1, JSON.stringify(totals));
+  check('碎片化：第 2 次仍拦（不受冷却）', totals[1] === 2, JSON.stringify(totals));
+  check('碎片化：第 3 次仍拦（不受冷却）', totals[2] === 3, JSON.stringify(totals));
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

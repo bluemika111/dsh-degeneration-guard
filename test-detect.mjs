@@ -27,28 +27,32 @@ const strict = { threshold: 3, inlineRepeat: false };
 const inline = { threshold: 3, inlineRepeat: true };
 const loose = { threshold: 5, inlineRepeat: false };
 
-// —— 短行门槛：长度 ≤ 4 的行需要 threshold + 2 次 ——
+// —— 短行门槛：只有"健康上下文"里才加宽；整段碎片化时恢复基础门槛 ——
 
-// 1. 短行「好。」门槛 3 → 实际要 5 次
-expectHit('短行 好。 ×3（门槛 3，需 5）', '好。\n'.repeat(3), strict, false);
-expectHit('短行 好。 ×5（门槛 3，需 5）', '好。\n'.repeat(5), strict, true);
+/** 把短句和实质内容交替排列，保持非碎片化上下文。 */
+function mixed(n) {
+  const out = [];
+  for (let i = 0; i < n; i += 1) {
+    out.push('执行。');
+    out.push(`第 ${i} 步：读取配置文件并核对字段 ${i}，确认与文档描述一致。`);
+  }
+  return out.join('\n') + '\n';
+}
 
-// 2. 交替碎片复读，凑够 5 次才拦
-expectHit('交替 做。 ×3（不够）', '好。\n做。\n开始。\n做。\n嗯。\n做。\n', strict, false);
-expectHit(
-  '交替 做。 ×5（够）',
-  '好。\n做。\n开始。\n做。\n嗯。\n做。\n诶。\n做。\n哦。\n做。\n',
-  strict,
-  true,
-);
+// 1. 纯短行上下文 = 碎片化 → 短行恢复基础门槛
+expectHit('纯短行 好。 ×3（碎片化，门槛 3）', '好。\n'.repeat(3), strict, true);
+expectHit('纯短行 好。 ×5（碎片化，门槛 3）', '好。\n'.repeat(5), strict, true);
+
+// 2. 交替碎片复读 = 碎片化
+expectHit('交替 做。 ×3（碎片化，门槛 3）', '好。\n做。\n开始。\n做。\n嗯。\n做。\n', strict, true);
 
 // 3. 长行不受短行门槛影响：出现 3 次就拦
 expectHit('长句 ×3（门槛 3）', '我需要先检查服务器状态。\n'.repeat(3), strict, true);
 expectHit('长句 ×2（门槛 3，不够）', '我需要先检查服务器状态。\n'.repeat(2), strict, false);
 
-// 4. 门槛 5 时：「执行。」要 7 次，长句仍是 5 次
-expectHit('短行 执行。 ×5（门槛 5，需 7）', '执行。\n'.repeat(5), loose, false);
-expectHit('短行 执行。 ×7（门槛 5，需 7）', '执行。\n'.repeat(7), loose, true);
+// 4. 非碎片化的健康上下文里，短行要 7 次（门槛 5 + 2）
+expectHit('非碎片化 执行。 ×5（门槛 5，需 7）', mixed(5), loose, false);
+expectHit('非碎片化 执行。 ×7（门槛 5，需 7）', mixed(7), loose, true);
 expectHit('长句 ×5（门槛 5）', '我需要先检查服务器状态。\n'.repeat(5), loose, true);
 
 // —— 行内重复开关 ——
@@ -80,7 +84,7 @@ expectHit(
   true,
 );
 
-// —— 真实样本：0.1.2 的误伤 ——
+// —— 真实样本：0.1.2 的误伤（非碎片化上下文） ——
 
 {
   const fixture = fs.readFileSync(new URL('./test-fixtures/operation-log.txt', import.meta.url), 'utf8');
@@ -89,6 +93,23 @@ expectHit(
     .map((l) => l.trim())
     .filter((l) => l === '执行。').length;
   expectHit(`真实操作日志（${executed} 个「执行。」）不命中`, fixture, loose, false);
+}
+
+// —— 碎片化上下文：整段都在短句之间打转 ——
+
+{
+  const cycle = ['执行。', '写文件。', '执行。', '好。', '执行。', '写。', '执行。', '完成。', '写。', '执行。', '写文件。', '执行。', '好。', '执行。'];
+  const thunder = [];
+  for (let i = 0; i < 8; i += 1) thunder.push(...cycle);
+  expectHit('碎片化：雷霆复读命中（门槛 5，短行恢复为 5 次）', thunder.join('\n') + '\n', loose, true);
+
+  // 同样的短句，但夹在实质内容里 → 非碎片化 → 仍按宽松门槛，不命中
+  const healthy = [];
+  for (let i = 0; i < 5; i += 1) {
+    healthy.push('执行。');
+    healthy.push(`第 ${i} 步：读取配置文件并核对字段 ${i}，确认与文档描述一致。`);
+  }
+  expectHit('非碎片化：同样的短句不命中', healthy.join('\n') + '\n', loose, false);
 }
 
 // —— 流式输入 ——

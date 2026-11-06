@@ -32,6 +32,12 @@ const PENDING_UNIT_LIMIT = 64;
 const FENCE = /^(```|~~~)/;
 
 /**
+ * 行内重复的单元至少要含一个"有内容的字符"（字母、数字、汉字）。
+ * 纯符号单元（反引号、井号、横线、点）在写代码块和分隔线时天然重复，不算复读。
+ */
+const MEANINGFUL = /[\p{L}\p{N}]/u;
+
+/**
  * 短行门槛：长度不超过这个值的行（"执行。" "好。" 这类命令动词、口头禅），
  * 需要比阈值多出现几次才算复读。
  *
@@ -124,6 +130,12 @@ function inlineRun(line, limit) {
       continue;
     }
     const unit = line.slice(0, period);
+    // 纯符号的重复不算复读：模型写代码块标记、分隔线、列表符号时天然会出现
+    // 三个反引号、三个井号、三条横线，它们不是"在原地打转"。单元里至少要有一个
+    // 字母、数字或汉字，才算有内容的重复。
+    if (!MEANINGFUL.test(unit)) {
+      continue;
+    }
     if (unit.repeat(count) === line) {
       return { unit, count };
     }
@@ -225,10 +237,15 @@ export function createAnalyzer() {
         at = pending.indexOf('\n');
       }
       // 还没换行：句子里可能已经在原地打转（"好。好。好。"），边写边判。
+      // 但这里必须沿用完成行的那套排除条件：正在输出的代码围栏标记（例如三个
+      // 反引号刚写完、还没换行）不是复读，pending 分支以前漏了这一层。
       if (config.inlineRepeat && pending.length > 0 && pending.length <= PENDING_CHECK_LIMIT) {
-        const inline = inlineRun(pending.trim(), PENDING_UNIT_LIMIT);
-        if (inline !== null && inline.count >= config.threshold) {
-          return { kind: 'inline', line: inline.unit, count: inline.count };
+        const partial = pending.trim();
+        if (partial !== '' && !FENCE.test(partial) && !isDecorative(partial)) {
+          const inline = inlineRun(partial, PENDING_UNIT_LIMIT);
+          if (inline !== null && inline.count >= config.threshold) {
+            return { kind: 'inline', line: inline.unit, count: inline.count };
+          }
         }
       }
       return null;

@@ -61,6 +61,15 @@ expectHit('长句 ×5（门槛 5）', '我需要先检查服务器状态。\n'.r
 expectHit('行内重复关闭时不拦', '好。好。好。\n', strict, false);
 expectHit('行内重复开启时拦', '好。好。好。\n', inline);
 expectHit('长短语行内重复', '让我先看看。让我先看看。让我先看看。\n', inline);
+expectHit('带符号的文字重复仍拦', '✓好✓好✓好\n', inline);
+
+// —— 纯符号重复不算复读 ——
+
+expectHit('未换行的三个反引号不拦', '```', inline, false);
+expectHit('未换行的三个井号不拦', '###', inline, false);
+expectHit('六条横线不拦', '------\n', inline, false);
+expectHit('纯点重复不拦', '...\n', inline, false);
+expectHit('行内反引号重复不拦', '```\n```\n```\n', inline, false);
 
 // —— 排除项 ——
 

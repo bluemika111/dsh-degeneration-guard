@@ -50,10 +50,49 @@ expectHit('交替 做。 ×3（碎片化，门槛 3）', '好。\n做。\n开始
 expectHit('长句 ×3（门槛 3）', '我需要先检查服务器状态。\n'.repeat(3), strict, true);
 expectHit('长句 ×2（门槛 3，不够）', '我需要先检查服务器状态。\n'.repeat(2), strict, false);
 
-// 4. 非碎片化的健康上下文里，短行要 7 次（门槛 5 + 2）
-expectHit('非碎片化 执行。 ×5（门槛 5，需 7）', mixed(5), loose, false);
-expectHit('非碎片化 执行。 ×7（门槛 5，需 7）', mixed(7), loose, true);
+// 4. 非碎片化的健康上下文里，短行要比阈值多 1 次（默认 shortBonus=1）
+expectHit('非碎片化 执行。 ×5（门槛 5，短句门槛 6）', mixed(5), loose, false);
+expectHit('非碎片化 执行。 ×6（门槛 5，短句门槛 6）', mixed(6), loose, true);
 expectHit('长句 ×5（门槛 5）', '我需要先检查服务器状态。\n'.repeat(5), loose, true);
+
+// 5. shortBonus 可配置
+{
+  const zero = { threshold: 4, shortBonus: 0, inlineRepeat: false };
+  const one = { threshold: 4, shortBonus: 1, inlineRepeat: false };
+  expectHit('shortBonus=0：短句 4 次即拦', mixed(4), zero, true);
+  expectHit('shortBonus=1：短句 4 次不拦', mixed(4), one, false);
+}
+
+// 6. 用户报告的「操作日志式」形态：阈值 4，短句密集（碎片化）
+{
+  const logLines = [
+    '3. 修改',
+    '先读 portal.go。',
+    '执行。',
+    '时间 12:05。',
+    '同时：看 pages.go 的 CSS。',
+    '执行。',
+    '时间 12:05。',
+    '两个并行。',
+    '执行。',
+    '写。',
+    '执行。',
+    '好。',
+    '执行。',
+    '写命令。',
+    '执行。',
+    '完成。',
+    '写。',
+    '执行。',
+    '好，直接执行。',
+  ];
+  expectHit(
+    '操作日志式（阈值 4，碎片化）命中',
+    logLines.join('\n') + '\n',
+    { threshold: 4, shortBonus: 1, inlineRepeat: false },
+    true,
+  );
+}
 
 // —— 行内重复开关 ——
 

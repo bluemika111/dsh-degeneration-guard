@@ -47,8 +47,8 @@ const MEANINGFUL = /[\p{L}\p{N}]/u;
  */
 const SHORT_LINE_LIMIT = 4;
 
-/** 短行需要的额外次数。 */
-const SHORT_LINE_BONUS = 2;
+/** 短行需要的额外次数（配置缺省时的兜底）。 */
+const SHORT_LINE_BONUS = 1;
 
 /**
  * 判断"整段思考已经碎片化"的短行长度上限，比 SHORT_LINE_LIMIT 宽一点。
@@ -90,14 +90,15 @@ function isFragmented(lines, from) {
  * @param {string} line - 已 trim 的行。
  * @param {number} base - 配置的阈值。
  * @param {boolean} fragmented - 窗口是否已碎片化。
+ * @param {number} bonus - 短句额外次数（配置项）。
  * @returns {number} 实际门槛。
  */
-function needCount(line, base, fragmented) {
+function needCount(line, base, fragmented, bonus) {
   if (fragmented) {
     // 整段都在打转时，短行重复本身就是退化信号，不再加宽。
     return base;
   }
-  return line.length <= SHORT_LINE_LIMIT ? base + SHORT_LINE_BONUS : base;
+  return line.length <= SHORT_LINE_LIMIT ? base + bonus : base;
 }
 
 /**
@@ -206,7 +207,7 @@ export function createAnalyzer() {
     for (let at = from; at < lines.length; at += 1) {
       const line = lines[at];
       const seen = (counts.get(line) ?? 0) + 1;
-      if (seen >= needCount(line, config.threshold, fragmented)) {
+      if (seen >= needCount(line, config.threshold, fragmented, config.shortBonus ?? SHORT_LINE_BONUS)) {
         return { kind: 'line', line, count: seen, fragmented };
       }
       counts.set(line, seen);

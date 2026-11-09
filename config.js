@@ -23,6 +23,18 @@ export const THRESHOLD_MIN = 2;
 /** 阈值上限。 */
 export const THRESHOLD_MAX = 9;
 
+/**
+ * 短句额外次数：长度 ≤ 4 的行要比阈值多出现几次才算复读。
+ *
+ * 这是给"正常任务里偶尔写一行执行。"留的宽限。默认 1 是折中：阈值 4 时短句要 5 次，
+ * 既能放过真实日志里那种夹着实质内容的误伤（5 次），又能拦住在步骤之间反复打转的
+ * 操作日志式复读。设 0 表示短句与长句同门槛。
+ */
+export const DEFAULT_SHORT_BONUS = 1;
+
+/** 短句额外次数的上限。 */
+export const SHORT_BONUS_MAX = 4;
+
 /** 默认关闭行内重复检测：只认跨换行的重复，也就是只检测独立段落。 */
 export const DEFAULT_INLINE_REPEAT = false;
 
@@ -82,6 +94,7 @@ function valueOf(field) {
  */
 export const Config = z.object({
   threshold: mark(z.number().default(DEFAULT_THRESHOLD)),
+  shortBonus: mark(z.number().default(DEFAULT_SHORT_BONUS)),
   inlineRepeat: mark(z.boolean().default(DEFAULT_INLINE_REPEAT)),
   autoResume: mark(z.boolean().default(DEFAULT_AUTO_RESUME)),
   resumeText: mark(z.string().default(DEFAULT_RESUME_TEXT)),
@@ -93,6 +106,7 @@ export const Config = z.object({
  * 判定与续跑用得上的一份配置快照。
  * @typedef {{
  *   threshold: number,
+ *   shortBonus: number,
  *   inlineRepeat: boolean,
  *   autoResume: boolean,
  *   resumeText: string,
@@ -108,6 +122,7 @@ export const Config = z.object({
 function snapshot(config) {
   return {
     threshold: Math.min(THRESHOLD_MAX, Math.max(THRESHOLD_MIN, Math.round(valueOf(config.threshold)))),
+    shortBonus: Math.min(SHORT_BONUS_MAX, Math.max(0, Math.round(valueOf(config.shortBonus)))),
     inlineRepeat: valueOf(config.inlineRepeat),
     autoResume: valueOf(config.autoResume),
     resumeText: valueOf(config.resumeText),

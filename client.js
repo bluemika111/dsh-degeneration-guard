@@ -140,6 +140,7 @@ window.__ModuleLoader__.load({
     function Form(props) {
       const { initial, count, onReset, onSave } = props;
       const [threshold, setThreshold] = React.useState(initial.threshold);
+      const [shortBonus, setShortBonus] = React.useState(initial.shortBonus ?? 1);
       const [inlineRepeat, setInlineRepeat] = React.useState(initial.inlineRepeat);
       const [autoResume, setAutoResume] = React.useState(initial.autoResume);
       const [resumeText, setResumeText] = React.useState(initial.resumeText);
@@ -150,6 +151,7 @@ window.__ModuleLoader__.load({
         setNote('保存中…');
         onSave({
           threshold,
+          shortBonus,
           inlineRepeat,
           autoResume,
           resumeText,
@@ -213,6 +215,21 @@ window.__ModuleLoader__.load({
             label: '重复次数阈值',
             onChange: (next) => {
               setThreshold(next);
+              setNote('');
+            },
+          }),
+        }),
+
+        h(Row, {
+          title: '短句额外次数',
+          desc: '「执行。」「好。」这类 4 字以内的短句要比阈值再多出现几次；设 0 则与长句同门槛',
+          control: h(Stepper, {
+            value: shortBonus,
+            min: 0,
+            max: 4,
+            label: '短句额外次数',
+            onChange: (next) => {
+              setShortBonus(next);
               setNote('');
             },
           }),
@@ -407,6 +424,7 @@ window.__ModuleLoader__.load({
             },
             onSave: async (next) => {
               await form.set('threshold', next.threshold);
+              await form.set('shortBonus', next.shortBonus);
               await form.set('inlineRepeat', next.inlineRepeat);
               await form.set('autoResume', next.autoResume);
               await form.set('resumeText', next.resumeText);

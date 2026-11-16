@@ -110,6 +110,32 @@ expectHit('六条横线不拦', '------\n', inline, false);
 expectHit('纯点重复不拦', '...\n', inline, false);
 expectHit('行内反引号重复不拦', '```\n```\n```\n', inline, false);
 
+// —— markdown 加粗不改变短行判定 ——
+
+{
+  const bold = ['**执行。**', '**写。**', '**执行。**', '**好。**', '**执行。**', '**完成。**', '**写。**', '**执行。**', '**好，直接执行。**______'];
+  const thunder = [];
+  for (let i = 0; i < 4; i += 1) thunder.push(...bold);
+  expectHit(
+    '加粗短句的雷霆复读（碎片化）命中',
+    thunder.join('\n') + '\n',
+    { threshold: 3, shortBonus: 2, inlineRepeat: true },
+    true,
+  );
+
+  const mixedBold = [];
+  for (let i = 0; i < 4; i += 1) {
+    mixedBold.push('**执行。**');
+    mixedBold.push(`第 ${i} 步：读取配置文件并核对字段 ${i}，确认与文档描述一致。`);
+  }
+  expectHit(
+    '加粗短句在健康上下文里 4 次不拦',
+    mixedBold.join('\n') + '\n',
+    { threshold: 3, shortBonus: 2, inlineRepeat: true },
+    false,
+  );
+}
+
 // —— 排除项 ——
 
 expectHit(

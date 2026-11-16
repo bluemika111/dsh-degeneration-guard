@@ -66,6 +66,19 @@ const FRAGMENTED_LINE_LIMIT = 6;
 const FRAGMENTED_RATIO = 0.7;
 
 /**
+ * 去掉 markdown 强调标记后的可见长度。
+ *
+ * 模型复读时经常把短句加粗（`**执行。**`、`**好。**`），按原始长度算会把它当成
+ * "长行"：既躲过短行门槛，也把碎片化比例拉低，于是整段雷霆复读被当成正常内容。
+ * 判定一律用可见长度。
+ * @param {string} line - 已 trim 的行。
+ * @returns {number} 去掉 `*` `_` `` ` `` `~` 后的长度。
+ */
+function plainLength(line) {
+  return line.replace(/[*_`~]/g, '').trim().length;
+}
+
+/**
  * 窗口内是不是已经碎片化。
  * @param {string[]} lines - 已完成的判定行。
  * @param {number} from - 窗口起点。
@@ -78,7 +91,7 @@ function isFragmented(lines, from) {
   }
   let short = 0;
   for (let at = from; at < lines.length; at += 1) {
-    if (lines[at].length <= FRAGMENTED_LINE_LIMIT) {
+    if (plainLength(lines[at]) <= FRAGMENTED_LINE_LIMIT) {
       short += 1;
     }
   }
@@ -98,7 +111,7 @@ function needCount(line, base, fragmented, bonus) {
     // 整段都在打转时，短行重复本身就是退化信号，不再加宽。
     return base;
   }
-  return line.length <= SHORT_LINE_LIMIT ? base + bonus : base;
+  return plainLength(line) <= SHORT_LINE_LIMIT ? base + bonus : base;
 }
 
 /**

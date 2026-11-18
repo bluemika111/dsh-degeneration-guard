@@ -223,5 +223,68 @@ const LONG_REPEAT = ['我需要先检查服务器状态。\n', '我需要先检�
   check('碎片化：第 3 次仍拦（不受冷却）', totals[2] === 3, JSON.stringify(totals));
 }
 
+// 9. 冷却开关：关掉后每次命中都拦
+{
+  let count = 0;
+  const state = { pending: new Map(), recent: new Map() };
+  const runtime = {
+    read: () => ({
+      threshold: 5,
+      shortBonus: 1,
+      inlineRepeat: false,
+      autoResume: true,
+      cooldownEnabled: false,
+      cooldownMinutes: 10,
+      cooldownMax: 2,
+      resumeText: '',
+      resumeSummary: '',
+    }),
+    countHit: () => {
+      count += 1;
+      return count;
+    },
+  };
+  const guard = createStreamGuard(state, runtime);
+  const parts = ['我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n'];
+  const totals = [];
+  for (let i = 0; i < 4; i += 1) {
+    await collect(guard({ sessionId: 'nocool' }, () => upstream(parts)));
+    totals.push(count);
+  }
+  check('关闭冷却：4 次全部拦截', totals[3] === 4, JSON.stringify(totals));
+}
+
+// 10. 冷却参数可调：上限 5 时允许拦 5 次
+{
+  let count = 0;
+  const state = { pending: new Map(), recent: new Map() };
+  const runtime = {
+    read: () => ({
+      threshold: 5,
+      shortBonus: 1,
+      inlineRepeat: false,
+      autoResume: true,
+      cooldownEnabled: true,
+      cooldownMinutes: 10,
+      cooldownMax: 5,
+      resumeText: '',
+      resumeSummary: '',
+    }),
+    countHit: () => {
+      count += 1;
+      return count;
+    },
+  };
+  const guard = createStreamGuard(state, runtime);
+  const parts = ['我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n', '我需要先检查服务器状态。\n'];
+  const totals = [];
+  for (let i = 0; i < 7; i += 1) {
+    await collect(guard({ sessionId: 'cool5' }, () => upstream(parts)));
+    totals.push(count);
+  }
+  check('冷却上限 5：前 5 次拦截', totals[4] === 5, JSON.stringify(totals));
+  check('冷却上限 5：第 6 次放行', totals[6] === 5, JSON.stringify(totals));
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -35,6 +35,23 @@ export const DEFAULT_SHORT_BONUS = 1;
 /** 短句额外次数的上限。 */
 export const SHORT_BONUS_MAX = 4;
 
+/** 默认开启冷却：同一会话短时间内最多拦几次。 */
+export const DEFAULT_COOLDOWN_ENABLED = true;
+
+/** 冷却窗口默认 10 分钟。 */
+export const DEFAULT_COOLDOWN_MINUTES = 10;
+
+/** 窗口内默认最多拦 2 次。 */
+export const DEFAULT_COOLDOWN_MAX = 2;
+
+/** 冷却窗口的取值范围（分钟）。 */
+export const COOLDOWN_MINUTES_MIN = 1;
+export const COOLDOWN_MINUTES_MAX = 60;
+
+/** 窗口内拦截次数的取值范围。 */
+export const COOLDOWN_MAX_MIN = 1;
+export const COOLDOWN_MAX_MAX = 10;
+
 /** 默认关闭行内重复检测：只认跨换行的重复，也就是只检测独立段落。 */
 export const DEFAULT_INLINE_REPEAT = false;
 
@@ -97,6 +114,9 @@ export const Config = z.object({
   shortBonus: mark(z.number().default(DEFAULT_SHORT_BONUS)),
   inlineRepeat: mark(z.boolean().default(DEFAULT_INLINE_REPEAT)),
   autoResume: mark(z.boolean().default(DEFAULT_AUTO_RESUME)),
+  cooldownEnabled: mark(z.boolean().default(DEFAULT_COOLDOWN_ENABLED)),
+  cooldownMinutes: mark(z.number().default(DEFAULT_COOLDOWN_MINUTES)),
+  cooldownMax: mark(z.number().default(DEFAULT_COOLDOWN_MAX)),
   resumeText: mark(z.string().default(DEFAULT_RESUME_TEXT)),
   resumeSummary: mark(z.string().default(DEFAULT_RESUME_SUMMARY)),
   count: mark(z.number().default(0)),
@@ -125,6 +145,15 @@ function snapshot(config) {
     shortBonus: Math.min(SHORT_BONUS_MAX, Math.max(0, Math.round(valueOf(config.shortBonus)))),
     inlineRepeat: valueOf(config.inlineRepeat),
     autoResume: valueOf(config.autoResume),
+    cooldownEnabled: valueOf(config.cooldownEnabled) !== false,
+    cooldownMinutes: Math.min(
+      COOLDOWN_MINUTES_MAX,
+      Math.max(COOLDOWN_MINUTES_MIN, Math.round(valueOf(config.cooldownMinutes) ?? DEFAULT_COOLDOWN_MINUTES)),
+    ),
+    cooldownMax: Math.min(
+      COOLDOWN_MAX_MAX,
+      Math.max(COOLDOWN_MAX_MIN, Math.round(valueOf(config.cooldownMax) ?? DEFAULT_COOLDOWN_MAX)),
+    ),
     resumeText: valueOf(config.resumeText),
     resumeSummary: valueOf(config.resumeSummary),
   };

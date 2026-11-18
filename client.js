@@ -69,7 +69,7 @@ window.__ModuleLoader__.load({
 
     /** 数字步进器。 */
     function Stepper(props) {
-      const { value, min, max, label, onChange } = props;
+      const { value, min, max, label, unit = '次', onChange } = props;
       return h(
         'span',
         { className: 'dg-control' },
@@ -100,7 +100,7 @@ window.__ModuleLoader__.load({
           },
           '+',
         ),
-        h('span', { className: 'dg-unit' }, '次'),
+        h('span', { className: 'dg-unit' }, unit),
       );
     }
 
@@ -143,6 +143,9 @@ window.__ModuleLoader__.load({
       const [shortBonus, setShortBonus] = React.useState(initial.shortBonus ?? 1);
       const [inlineRepeat, setInlineRepeat] = React.useState(initial.inlineRepeat);
       const [autoResume, setAutoResume] = React.useState(initial.autoResume);
+      const [cooldownEnabled, setCooldownEnabled] = React.useState(initial.cooldownEnabled !== false);
+      const [cooldownMinutes, setCooldownMinutes] = React.useState(initial.cooldownMinutes ?? 10);
+      const [cooldownMax, setCooldownMax] = React.useState(initial.cooldownMax ?? 2);
       const [resumeText, setResumeText] = React.useState(initial.resumeText);
       const [resumeSummary, setResumeSummary] = React.useState(initial.resumeSummary);
       const [note, setNote] = React.useState('');
@@ -154,6 +157,9 @@ window.__ModuleLoader__.load({
           shortBonus,
           inlineRepeat,
           autoResume,
+          cooldownEnabled,
+          cooldownMinutes,
+          cooldownMax,
           resumeText,
           resumeSummary,
         })
@@ -256,6 +262,50 @@ window.__ModuleLoader__.load({
             label: '自动继续',
             onChange: (next) => {
               setAutoResume(next);
+              setNote('');
+            },
+          }),
+        }),
+
+        h(Row, {
+          title: '冷却',
+          desc: '同一会话在一段时间内最多拦几次，超出就放行；关闭后每次命中都拦',
+          control: h(Switch, {
+            checked: cooldownEnabled,
+            label: '冷却',
+            onChange: (next) => {
+              setCooldownEnabled(next);
+              setNote('');
+            },
+          }),
+        }),
+
+        h(Row, {
+          title: '冷却窗口',
+          desc: '多长时间内算同一轮冷却；窗口越长越不容易连环打断',
+          control: h(Stepper, {
+            value: cooldownMinutes,
+            min: 1,
+            max: 60,
+            unit: '分钟',
+            label: '冷却窗口',
+            onChange: (next) => {
+              setCooldownMinutes(next);
+              setNote('');
+            },
+          }),
+        }),
+
+        h(Row, {
+          title: '窗口内最多拦截',
+          desc: '冷却窗口内允许的拦截次数，超出后放行',
+          control: h(Stepper, {
+            value: cooldownMax,
+            min: 1,
+            max: 10,
+            label: '窗口内最多拦截',
+            onChange: (next) => {
+              setCooldownMax(next);
               setNote('');
             },
           }),
@@ -427,6 +477,9 @@ window.__ModuleLoader__.load({
               await form.set('shortBonus', next.shortBonus);
               await form.set('inlineRepeat', next.inlineRepeat);
               await form.set('autoResume', next.autoResume);
+              await form.set('cooldownEnabled', next.cooldownEnabled);
+              await form.set('cooldownMinutes', next.cooldownMinutes);
+              await form.set('cooldownMax', next.cooldownMax);
               await form.set('resumeText', next.resumeText);
               await form.set('resumeSummary', next.resumeSummary);
             },

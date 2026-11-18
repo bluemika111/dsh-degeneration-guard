@@ -11,12 +11,6 @@
 
 import { createAnalyzer } from './detect.js';
 
-/** 冷却窗口：同一会话在这个时间窗内最多拦几次。 */
-const COOLDOWN_WINDOW_MS = 10 * 60 * 1000;
-
-/** 窗口内允许的拦截次数。 */
-const COOLDOWN_MAX = 2;
-
 /** `llm/stream` 的监听器签名。 */
 /**
  * @typedef {(
@@ -29,22 +23,29 @@ const COOLDOWN_MAX = 2;
  * 取一次拦截配额。
  *
  * 冷却窗口内配额用完时返回 `allowed: false`：这一次命中不截断、不计数，只记日志。
- * 宁可放过一次退化，也不要在一段正常任务里连续打断十几次。
+ * 宁可放过一次退化，也不要在一段正常任务里连续打断十几次。窗口长度与上限都由配置
+ * 决定，关掉冷却则永远放行（每条命中都拦）。
  *
  * @param {{ pending: Map<string, { count: number, line: string }>, recent: Map<string, number[]> }} state - 拦截状态。
  * @param {string | undefined} sessionId - 会话 id。
  * @param {number} now - 当前时间戳。
+ * @param {{ cooldownEnabled: boolean, cooldownMinutes: number, cooldownMax: number }} config - 当前配置。
  * @returns {{ allowed: boolean, used: number }} 是否允许，以及窗口内已用次数。
  */
-function takeSlot(state, sessionId, now) {
-  if (sessionId === undefined) {
+function takeSlot(state, sessionId, now, config) {
+  if (sessionId === undefined || config.cooldownEnabled === false) {
     return { allowed: true, used: 0 };
   }
   if (!(state.recent instanceof Map)) {
     state.recent = new Map();
   }
-  const list = (state.recent.get(sessionId) ?? []).filter((at) => now - at < COOLDOWN_WINDOW_MS);
-  if (list.length >= COOLDOWN_MAX) {
+  // 配置缺字段时退回默认值：10 分钟、2 次。测试与旧配置都可能没带这两项。
+  const minutes = Number(config.cooldownMinutes);
+  const windowMs = (Number.isFinite(minutes) && minutes > 0 ? minutes : 10) * 60 * 1000;
+  const limitRaw = Number(config.cooldownMax);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 2;
+  const list = (state.recent.get(sessionId) ?? []).filter((at) => now - at < windowMs);
+  if (list.length >= limit) {
     state.recent.set(sessionId, list);
     return { allowed: false, used: list.length };
   }
@@ -88,7 +89,7 @@ async function* guardStream(downstream, sessionId, state, runtime) {
             const slot =
               hit.fragmented === true
                 ? { allowed: true, used: 0, bypassed: true }
-                : takeSlot(state, sessionId, Date.now());
+                : takeSlot(state, sessionId, Date.now(), config);
             if (!slot.allowed) {
               suppressed = true;
               console.log(
